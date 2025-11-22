@@ -1,3 +1,4 @@
+// src/components/ui/project-card.tsx
 import React from "react";
 
 interface ProjectCardProps {
@@ -6,6 +7,7 @@ interface ProjectCardProps {
   author: string;
   techStack: string;
   description: string;
+  onClick?: () => void;
 }
 
 export const ProjectCard: React.FC<ProjectCardProps> = ({
@@ -14,9 +16,11 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   author,
   techStack,
   description,
+  onClick,
 }) => {
   return (
     <div
+      onClick={onClick}
       className="
         w-full 
         bg-white 
@@ -31,11 +35,10 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
         flex 
         flex-col
         sm:flex-row
+        cursor-pointer
       "
-      style={{ minHeight: "180px" }}
     >
-      {/* IMAGE LEFT */}
-      <div className="sm:w-2/5 w-full h-44 sm:h-auto overflow-hidden">
+      <div className="sm:w-1/3 h-48 sm:h-auto relative">
         <img
           src={image}
           alt={title}
@@ -43,14 +46,13 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
         />
       </div>
 
-      {/* CONTENT RIGHT */}
-      <div className="sm:w-3/5 w-full p-4 flex flex-col justify-between">
+      <div className="sm:w-2/3 p-6 flex flex-col justify-between">
         <div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-1">
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
             {title}
           </h3>
 
-          <p className="text-sm text-gray-500 mb-3">
+          <p className="text-sm text-gray-500 mb-2">
             {techStack}
           </p>
 

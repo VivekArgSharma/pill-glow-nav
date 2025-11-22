@@ -1,66 +1,169 @@
+// src/pages/Post.tsx
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { Upload, Link, Image, FileText } from "lucide-react";
+import { Link as LinkIcon, Image as ImageIcon, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/contexts/AuthContext";
 
 type PostType = "project" | "blog" | null;
-type FormState = "idle" | "loading" | "success";
+type FormState = "idle" | "loading" | "success" | "error";
+
+const API_URL = import.meta.env.VITE_API_URL as string;
 
 const Post = () => {
   const [postType, setPostType] = useState<PostType>(null);
   const [formState, setFormState] = useState<FormState>("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const { accessToken, session, profile, signInWithGoogle } = useAuth();
 
   // Project form state
   const [projectLink, setProjectLink] = useState("");
   const [projectTitle, setProjectTitle] = useState("");
-  const [projectLogo, setProjectLogo] = useState<File | null>(null);
-  const [projectScreenshots, setProjectScreenshots] = useState<FileList | null>(null);
+  const [projectLogoUrl, setProjectLogoUrl] = useState("");
+  const [projectScreenshotUrls, setProjectScreenshotUrls] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
   const [projectDetailedWriteup, setProjectDetailedWriteup] = useState("");
+  const [projectGithubLink, setProjectGithubLink] = useState("");
 
   // Blog form state
   const [blogTitle, setBlogTitle] = useState("");
-  const [blogImages, setBlogImages] = useState<FileList | null>(null);
+  const [blogImageUrls, setBlogImageUrls] = useState("");
   const [blogContent, setBlogContent] = useState("");
 
-  const handleProjectSubmit = (e: React.FormEvent) => {
+  const requireAuth = () => {
+    if (!session) {
+      setErrorMessage("You need to sign in with Google before posting.");
+      return false;
+    }
+    if (!accessToken) {
+      setErrorMessage("Auth token not found, try signing in again.");
+      return false;
+    }
+    return true;
+  };
+
+  const handleProjectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormState("loading");
-    setTimeout(() => {
+    setErrorMessage(null);
+
+    if (!requireAuth()) return;
+
+    try {
+      setFormState("loading");
+
+      const body = {
+        type: "project",
+        title: projectTitle,
+        content: projectDetailedWriteup,
+        short_description: projectDescription,
+        project_link: projectLink || null,
+        github_link: projectGithubLink || null,
+        cover_image_url: projectLogoUrl || null,
+        images: projectScreenshotUrls
+          ? projectScreenshotUrls
+              .split("\n")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [],
+        tags: [], // you can add tech stack tags later
+      };
+
+      const res = await fetch(`${API_URL}/api/posts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to publish project");
+      }
+
       setFormState("success");
+
+      // Reset form after a short delay
       setTimeout(() => {
         setFormState("idle");
         setPostType(null);
-        // Reset form
         setProjectLink("");
         setProjectTitle("");
-        setProjectLogo(null);
-        setProjectScreenshots(null);
+        setProjectLogoUrl("");
+        setProjectScreenshotUrls("");
         setProjectDescription("");
         setProjectDetailedWriteup("");
-      }, 2000);
-    }, 1500);
+        setProjectGithubLink("");
+      }, 1500);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage(err.message || "Something went wrong");
+      setFormState("error");
+    }
   };
 
-  const handleBlogSubmit = (e: React.FormEvent) => {
+  const handleBlogSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormState("loading");
-    setTimeout(() => {
+    setErrorMessage(null);
+
+    if (!requireAuth()) return;
+
+    try {
+      setFormState("loading");
+
+      const body = {
+        type: "blog",
+        title: blogTitle,
+        content: blogContent,
+        short_description: blogContent.slice(0, 160),
+        project_link: null,
+        github_link: null,
+        cover_image_url: null,
+        images: blogImageUrls
+          ? blogImageUrls
+              .split("\n")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [],
+        tags: [],
+      };
+
+      const res = await fetch(`${API_URL}/api/posts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to publish blog");
+      }
+
       setFormState("success");
+
       setTimeout(() => {
         setFormState("idle");
         setPostType(null);
-        // Reset form
         setBlogTitle("");
-        setBlogImages(null);
+        setBlogImageUrls("");
         setBlogContent("");
-      }, 2000);
-    }, 1500);
+      }, 1500);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage(err.message || "Something went wrong");
+      setFormState("error");
+    }
   };
 
+  // UI
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-20">
       <motion.div
@@ -69,213 +172,228 @@ const Post = () => {
         transition={{ duration: 0.5 }}
         className="max-w-2xl w-full"
       >
-        {formState === "success" ? (
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="text-center space-y-4"
-          >
-            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 32 32"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M27.6 16C27.6 17.5234 27.3 19.0318 26.717 20.4392C26.1341 21.8465 25.2796 23.1253 24.2025 24.2025C23.1253 25.2796 21.8465 26.1341 20.4392 26.717C19.0318 27.3 17.5234 27.6 16 27.6C14.4767 27.6 12.9683 27.3 11.5609 26.717C10.1535 26.1341 8.87475 25.2796 7.79759 24.2025C6.72043 23.1253 5.86598 21.8465 5.28302 20.4392C4.70007 19.0318 4.40002 17.5234 4.40002 16C4.40002 12.9235 5.62216 9.97301 7.79759 7.79759C9.97301 5.62216 12.9235 4.40002 16 4.40002C19.0765 4.40002 22.027 5.62216 24.2025 7.79759C26.3779 9.97301 27.6 12.9235 27.6 16Z"
-                  fill="currentColor"
-                  fillOpacity="0.16"
-                  className="text-primary"
-                />
-                <path
-                  d="M12.1334 16.9667L15.0334 19.8667L19.8667 13.1M27.6 16C27.6 17.5234 27.3 19.0318 26.717 20.4392C26.1341 21.8465 25.2796 23.1253 24.2025 24.2025C23.1253 25.2796 21.8465 26.1341 20.4392 26.717C19.0318 27.3 17.5234 27.6 16 27.6C14.4767 27.6 12.9683 27.3 11.5609 26.717C10.1535 26.1341 8.87475 25.2796 7.79759 24.2025C6.72043 23.1253 5.86598 21.8465 5.28302 20.4392C4.70007 19.0318 4.40002 17.5234 4.40002 16C4.40002 12.9235 5.62216 9.97301 7.79759 7.79759C9.97301 5.62216 12.9235 4.40002 16 4.40002C19.0765 4.40002 22.027 5.62216 24.2025 7.79759C26.3779 9.97301 27.6 12.9235 27.6 16Z"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-primary"
-                />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-foreground">Successfully Posted!</h2>
-            <p className="text-muted-foreground">Your {postType} has been submitted successfully.</p>
-          </motion.div>
-        ) : !postType ? (
-          <div className="space-y-6">
-            <div className="text-center space-y-2">
-              <h1 className="text-4xl font-bold text-foreground">Share Your Work</h1>
-              <p className="text-muted-foreground">What would you like to upload?</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setPostType("project")}
-                className="p-8 border-2 border-border rounded-xl hover:border-primary transition-colors bg-card space-y-4"
-              >
-                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto">
-                  <Link className="w-6 h-6 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-foreground">Project</h3>
-                  <p className="text-sm text-muted-foreground mt-2">Share your website or application</p>
-                </div>
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setPostType("blog")}
-                className="p-8 border-2 border-border rounded-xl hover:border-primary transition-colors bg-card space-y-4"
-              >
-                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto">
-                  <FileText className="w-6 h-6 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-foreground">Blog</h3>
-                  <p className="text-sm text-muted-foreground mt-2">Write and share your thoughts</p>
-                </div>
-              </motion.button>
-            </div>
+        <h1 className="text-3xl font-bold mb-6 text-center text-foreground">
+          Share Your Work
+        </h1>
+
+        {!session && (
+          <div className="mb-6 p-4 border border-yellow-300 rounded-lg bg-yellow-50 text-sm text-yellow-800 text-center">
+            You are not logged in.{" "}
+            <button
+              className="font-semibold underline"
+              onClick={signInWithGoogle}
+            >
+              Click here to sign in with Google
+            </button>{" "}
+            to publish projects and blogs.
           </div>
-        ) : postType === "project" ? (
-          <motion.div
+        )}
+
+        {errorMessage && (
+          <div className="mb-4 p-3 rounded-md bg-red-100 text-red-700 text-sm">
+            {errorMessage}
+          </div>
+        )}
+
+        {formState === "success" && (
+          <div className="mb-4 p-3 rounded-md bg-green-100 text-green-700 text-sm text-center">
+            Your {postType === "project" ? "project" : "blog"} has been
+            published!
+          </div>
+        )}
+
+        {/* Select type */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setPostType("project")}
+            className={`p-6 border-2 rounded-xl transition-colors bg-card space-y-4 ${
+              postType === "project" ? "border-primary" : "border-border"
+            }`}
+          >
+            <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto">
+              <ImageIcon className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold text-foreground">Project</h3>
+              <p className="text-sm text-muted-foreground mt-2">
+                Share your website or application
+              </p>
+            </div>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setPostType("blog")}
+            className={`p-6 border-2 rounded-xl transition-colors bg-card space-y-4 ${
+              postType === "blog" ? "border-primary" : "border-border"
+            }`}
+          >
+            <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto">
+              <FileText className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold text-foreground">Blog</h3>
+              <p className="text-sm text-muted-foreground mt-2">
+                Write and share your dev blogs
+              </p>
+            </div>
+          </motion.button>
+        </div>
+
+        {/* Forms */}
+        {postType === "project" && (
+          <motion.form
+            onSubmit={handleProjectSubmit}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="space-y-4 bg-card p-6 rounded-xl border border-border"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="project-title">Project Title</Label>
+              <Input
+                id="project-title"
+                placeholder="My Awesome Portfolio"
+                value={projectTitle}
+                onChange={(e) => setProjectTitle(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="project-link">
+                Live Project Link <LinkIcon className="inline w-4 h-4" />
+              </Label>
+              <Input
+                id="project-link"
+                type="url"
+                placeholder="https://your-project.com"
+                value={projectLink}
+                onChange={(e) => setProjectLink(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="project-github">
+                GitHub Repo Link (optional)
+              </Label>
+              <Input
+                id="project-github"
+                type="url"
+                placeholder="https://github.com/you/your-project"
+                value={projectGithubLink}
+                onChange={(e) => setProjectGithubLink(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="project-logo-url">Project Logo Image URL</Label>
+              <Input
+                id="project-logo-url"
+                type="url"
+                placeholder="https://example.com/logo.png"
+                value={projectLogoUrl}
+                onChange={(e) => setProjectLogoUrl(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Paste a direct image URL. File uploads can be added later.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="project-screenshots">
+                Screenshot Image URLs (one per line)
+              </Label>
+              <Textarea
+                id="project-screenshots"
+                placeholder={"https://example.com/shot1.png\nhttps://example.com/shot2.png"}
+                value={projectScreenshotUrls}
+                onChange={(e) => setProjectScreenshotUrls(e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="project-description">Short Description</Label>
+              <Textarea
+                id="project-description"
+                placeholder="A short description shown on the card."
+                value={projectDescription}
+                onChange={(e) => setProjectDescription(e.target.value)}
+                rows={2}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="project-detailed">
+                Detailed Writeup (shown on project page)
+              </Label>
+              <Textarea
+                id="project-detailed"
+                placeholder="Explain the problem, tech stack, features…"
+                value={projectDetailedWriteup}
+                onChange={(e) => setProjectDetailedWriteup(e.target.value)}
+                rows={6}
+                required
+              />
+            </div>
+
+            <Button type="submit" className="w-full" disabled={formState === "loading"}>
+              {formState === "loading" ? "Publishing..." : "Publish Project"}
+            </Button>
+          </motion.form>
+        )}
+
+        {postType === "blog" && (
+          <motion.form
+            onSubmit={handleBlogSubmit}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
+            className="space-y-4 bg-card p-6 rounded-xl border border-border"
           >
-            <div className="flex items-center justify-between">
-              <h2 className="text-3xl font-bold text-foreground">Upload Project</h2>
-              <Button variant="ghost" onClick={() => setPostType(null)}>Back</Button>
+            <div className="space-y-2">
+              <Label htmlFor="blog-title">Blog Title</Label>
+              <Input
+                id="blog-title"
+                placeholder="What I learned building DevConnect"
+                value={blogTitle}
+                onChange={(e) => setBlogTitle(e.target.value)}
+                required
+              />
             </div>
-            <form onSubmit={handleProjectSubmit} className="space-y-6 bg-card border border-border rounded-xl p-6">
-              <div className="space-y-2">
-                <Label htmlFor="project-title">Project Title</Label>
-                <Input
-                  id="project-title"
-                  placeholder="Enter your project title"
-                  value={projectTitle}
-                  onChange={(e) => setProjectTitle(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="project-link">Project Link</Label>
-                <Input
-                  id="project-link"
-                  type="url"
-                  placeholder="https://your-project.com"
-                  value={projectLink}
-                  onChange={(e) => setProjectLink(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="project-logo">Project Logo (Optional)</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="project-logo"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setProjectLogo(e.target.files?.[0] || null)}
-                  />
-                  <Image className="w-5 h-5 text-muted-foreground" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="project-screenshots">Screenshots</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="project-screenshots"
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => setProjectScreenshots(e.target.files)}
-                    required
-                  />
-                  <Upload className="w-5 h-5 text-muted-foreground" />
-                </div>
-                <p className="text-xs text-muted-foreground">Upload multiple screenshots</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="project-description">Short Description</Label>
-                <Textarea
-                  id="project-description"
-                  placeholder="Brief description of your project"
-                  value={projectDescription}
-                  onChange={(e) => setProjectDescription(e.target.value)}
-                  rows={3}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="project-writeup">Detailed Write-up</Label>
-                <Textarea
-                  id="project-writeup"
-                  placeholder="Detailed description that will be displayed when users view your project"
-                  value={projectDetailedWriteup}
-                  onChange={(e) => setProjectDetailedWriteup(e.target.value)}
-                  rows={6}
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={formState === "loading"}>
-                {formState === "loading" ? "Submitting..." : "Submit Project"}
-              </Button>
-            </form>
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
-          >
-            <div className="flex items-center justify-between">
-              <h2 className="text-3xl font-bold text-foreground">Write Blog Post</h2>
-              <Button variant="ghost" onClick={() => setPostType(null)}>Back</Button>
+
+            <div className="space-y-2">
+              <Label htmlFor="blog-images">
+                Image URLs (one per line, optional)
+              </Label>
+              <Textarea
+                id="blog-images"
+                placeholder={"https://example.com/blog-image1.png"}
+                value={blogImageUrls}
+                onChange={(e) => setBlogImageUrls(e.target.value)}
+                rows={3}
+              />
             </div>
-            <form onSubmit={handleBlogSubmit} className="space-y-6 bg-card border border-border rounded-xl p-6">
-              <div className="space-y-2">
-                <Label htmlFor="blog-title">Blog Title</Label>
-                <Input
-                  id="blog-title"
-                  placeholder="Enter your blog title"
-                  value={blogTitle}
-                  onChange={(e) => setBlogTitle(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="blog-images">Images (Optional)</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="blog-images"
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => setBlogImages(e.target.files)}
-                  />
-                  <Upload className="w-5 h-5 text-muted-foreground" />
-                </div>
-                <p className="text-xs text-muted-foreground">Upload images for your blog post</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="blog-content">Blog Content</Label>
-                <Textarea
-                  id="blog-content"
-                  placeholder="Write your blog content here..."
-                  value={blogContent}
-                  onChange={(e) => setBlogContent(e.target.value)}
-                  rows={12}
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={formState === "loading"}>
-                {formState === "loading" ? "Publishing..." : "Publish Blog"}
-              </Button>
-            </form>
-          </motion.div>
+
+            <div className="space-y-2">
+              <Label htmlFor="blog-content">Blog Content</Label>
+              <Textarea
+                id="blog-content"
+                placeholder="Write your blog here..."
+                value={blogContent}
+                onChange={(e) => setBlogContent(e.target.value)}
+                rows={8}
+                required
+              />
+            </div>
+
+            <Button type="submit" className="w-full" disabled={formState === "loading"}>
+              {formState === "loading" ? "Publishing..." : "Publish Blog"}
+            </Button>
+          </motion.form>
         )}
       </motion.div>
     </div>
